@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getLastInput, saveLastInput, clearCache, getCacheStats } from '@/lib/cache';
 
 interface InputFormProps {
   onSubmit: (input: string) => Promise<void>;
@@ -14,8 +15,23 @@ export default function InputForm({
   error,
 }: InputFormProps) {
   const [input, setInput] = useState('');
+  const [cacheStats, setCacheStats] = useState({ count: 0, totalSize: 0 });
   const charCount = input.length;
   const isValid = charCount >= 20 && charCount <= 2000;
+
+  // Load saved input on mount (PRODUCTION FEATURE!)
+  useEffect(() => {
+    console.log('🚀 InputForm mounted - loading saved input...');
+    // Load user's last input (helps prevent data loss on refresh)
+    const lastInput = getLastInput();
+    if (lastInput) {
+      setInput(lastInput);
+    }
+
+    // Update cache stats
+    setCacheStats(getCacheStats());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +48,10 @@ export default function InputForm({
         </label>
         <textarea
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            saveLastInput(e.target.value); // Auto-save as they type!
+          }}
           placeholder="Example:
 • Gym M/T/Th/F 4-6am
 • AI learning 30min daily
@@ -97,6 +116,23 @@ export default function InputForm({
           'Generate Schedule'
         )}
       </button>
+
+      {/* Clear Cache Button - Dev Only */}
+      {process.env.NODE_ENV === 'development' && cacheStats.count > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            clearCache();
+            setCacheStats({ count: 0, totalSize: 0 });
+          }}
+          className="w-full bg-amber-500 hover:bg-amber-600 text-white py-2 px-4 rounded-lg font-medium text-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Clear Cache ({cacheStats.count} saved)
+        </button>
+      )}
 
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg">

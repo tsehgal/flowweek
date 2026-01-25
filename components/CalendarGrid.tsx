@@ -159,7 +159,7 @@ export default function CalendarGrid({
   return (
     <div
       ref={exportRef}
-      className="bg-white rounded-xl border border-[#e9e9e7] h-full flex flex-col transition-all duration-300"
+      className="bg-white rounded-xl border border-[#e9e9e7] h-auto md:h-full flex flex-col transition-all duration-300"
       style={{ boxShadow: '0 12px 24px rgba(0, 0, 0, 0.06)' }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-4px)';
@@ -170,12 +170,12 @@ export default function CalendarGrid({
         e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.06)';
       }}
     >
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-x-auto overflow-y-visible md:overflow-auto">
         {/* Calendar Grid */}
         <div
-          className="grid gap-0 bg-white rounded-xl overflow-hidden"
+          className="grid gap-0 bg-white rounded-xl overflow-hidden min-w-[600px] md:min-w-0 w-max"
           style={{
-            gridTemplateColumns: '70px repeat(7, 1fr)',
+            gridTemplateColumns: '50px repeat(7, minmax(80px, 1fr))',
             gridTemplateRows: `36px repeat(${timeSlots.length}, 32px)`,
           }}
         >
@@ -184,7 +184,7 @@ export default function CalendarGrid({
           {DAYS.map((day) => (
             <div
               key={day}
-              className={`border-b border-l border-[#e9e9e7] px-2 py-2 text-center font-semibold text-xs ${
+              className={`border-b border-l border-[#e9e9e7] px-1 md:px-2 py-2 text-center font-semibold text-[10px] md:text-xs ${
                 day === today
                   ? 'bg-[#2383e2]/5 text-[#2383e2]'
                   : 'bg-[#f4f5f7] text-[#272626]'
@@ -192,7 +192,7 @@ export default function CalendarGrid({
             >
               <div className="uppercase tracking-wide">{day.slice(0, 3)}</div>
               {day === today && (
-                <div className="mt-0.5">
+                <div className="mt-0.5 hidden md:block">
                   <span className="inline-block px-1.5 py-0.5 bg-[#2383e2] text-white text-[9px] font-medium rounded">
                     Today
                   </span>
