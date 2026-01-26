@@ -12,6 +12,20 @@ interface ExportDropdownProps {
   calendarRef: React.RefObject<HTMLDivElement | null>;
 }
 
+// Emoji mapping for categories (used in Google Calendar export)
+const categoryEmojis: Record<string, string> = {
+  gym: '💪',
+  'ai-learning': '🧠',
+  simmer: '✨',
+  'job-apps': '💼',
+  guitar: '🎸',
+  office: '💻',
+  family: '👨‍👩‍👧',
+  sleep: '😴',
+  breakfast: '🍳',
+  commute: '🚗',
+};
+
 export default function ExportDropdown({
   scheduleData,
   calendarRef,
@@ -141,10 +155,14 @@ export default function ExportDropdown({
           const startDate = timeToDate(dayIndex, activity.startTime);
           const endDate = timeToDate(dayIndex, activity.endTime);
 
+          // Get emoji for category (if available)
+          const emoji = categoryEmojis[activity.category] || '';
+          const eventTitle = emoji ? `${emoji} ${activity.name}` : activity.name;
+
           const event = calendar.createEvent({
             start: startDate,
             end: endDate,
-            summary: `${activity.name}`,
+            summary: eventTitle,
             description: `Category: ${activity.category}`,
             location: '',
           });
