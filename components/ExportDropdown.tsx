@@ -1,15 +1,17 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { ScheduleResponse } from '@/types/schedule';
+import { ScheduleResponse, EditableActivity } from '@/types/schedule';
 import { jsPDF } from 'jspdf';
 import ical, { ICalCalendar, ICalAlarmType } from 'ical-generator';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { mockData } from '@/lib/mockData';
+import { denormalizeActivities } from '@/lib/utils';
 
 interface ExportDropdownProps {
   scheduleData: ScheduleResponse | null;
   calendarRef: React.RefObject<HTMLDivElement | null>;
+  editedActivities?: EditableActivity[];
 }
 
 // Emoji mapping for categories (used in Google Calendar export)
@@ -29,11 +31,20 @@ const categoryEmojis: Record<string, string> = {
 export default function ExportDropdown({
   scheduleData,
   calendarRef,
+  editedActivities = [],
 }: ExportDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
   const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  // Get activities to export (use edited if available, otherwise use original)
+  const getActivitiesToExport = () => {
+    if (editedActivities.length > 0) {
+      return denormalizeActivities(editedActivities);
+    }
+    return scheduleData?.activities || mockData.activities;
+  };
 
   // Helper: Convert time string (HH:MM) to Date object for a specific day
   const timeToDate = (dayIndex: number, timeString: string): Date => {
@@ -139,7 +150,7 @@ export default function ExportDropdown({
 
   // Export to Google Calendar (.ics)
   const handleICSExport = () => {
-    const data = scheduleData || mockData;
+    const activities = getActivitiesToExport();
 
     try {
       const calendar: ICalCalendar = ical({
@@ -147,8 +158,8 @@ export default function ExportDropdown({
         prodId: '//FlowWeek//Schedule//EN',
       });
 
-      data.activities.forEach((activity) => {
-        activity.days.forEach((day) => {
+      activities.forEach((activity) => {
+        activity.days.forEach((day: string) => {
           const dayIndex = DAYS.indexOf(day);
           if (dayIndex === -1) return;
 
@@ -196,7 +207,7 @@ export default function ExportDropdown({
 
   // Export to CSV (Notion-friendly)
   const handleCSVExport = () => {
-    const data = scheduleData || mockData;
+    const activities = getActivitiesToExport();
 
     try {
       // CSV Header
@@ -216,8 +227,8 @@ export default function ExportDropdown({
       };
 
       // Add each activity
-      data.activities.forEach((activity) => {
-        activity.days.forEach((day) => {
+      activities.forEach((activity) => {
+        activity.days.forEach((day: string) => {
           const duration = calculateDuration(activity.startTime, activity.endTime);
           rows.push([
             day,

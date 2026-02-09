@@ -171,3 +171,67 @@ export function clearLastInput(): void {
     console.error('Failed to clear input:', err);
   }
 }
+
+/**
+ * Generate hash for input (reusing existing logic)
+ */
+function getInputHash(input: string): string {
+  return simpleHash(input.trim().toLowerCase());
+}
+
+/**
+ * Get edited schedule from localStorage
+ */
+export function getEditedSchedule(inputHash: string): any[] | null {
+  if (typeof window === 'undefined') return null;
+
+  const key = `flowweek_edited_${inputHash}`;
+  const cached = localStorage.getItem(key);
+
+  if (!cached) return null;
+
+  try {
+    const entry = JSON.parse(cached);
+    console.log('✅ Loaded edited schedule from cache');
+    return entry.activities;
+  } catch (err) {
+    console.error('Failed to load edited schedule:', err);
+    return null;
+  }
+}
+
+/**
+ * Save edited schedule to localStorage
+ */
+export function saveEditedSchedule(inputHash: string, activities: any[]): void {
+  if (typeof window === 'undefined') return;
+
+  const key = `flowweek_edited_${inputHash}`;
+  const entry = {
+    activities,
+    lastModified: Date.now(),
+    originalInputHash: inputHash,
+  };
+
+  try {
+    localStorage.setItem(key, JSON.stringify(entry));
+    console.log('💾 Saved edited schedule to cache');
+  } catch (err) {
+    console.error('Failed to save edited schedule:', err);
+  }
+}
+
+/**
+ * Clear edited schedule from localStorage
+ */
+export function clearEditedSchedule(inputHash: string): void {
+  if (typeof window === 'undefined') return;
+
+  const key = `flowweek_edited_${inputHash}`;
+  try {
+    localStorage.removeItem(key);
+    console.log('🗑️ Cleared edited schedule');
+  } catch (err) {
+    console.error('Failed to clear edited schedule:', err);
+  }
+}

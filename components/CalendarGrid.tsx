@@ -1,20 +1,29 @@
 'use client';
 
-import React from 'react';
-import { ScheduleResponse } from '@/types/schedule';
+import React, { useState, useEffect } from 'react';
+import { DndContext, DragEndEvent, DragOverlay, pointerWithin } from '@dnd-kit/core';
+import { ScheduleResponse, EditableActivity } from '@/types/schedule';
 import {
   timeToMinutes,
   minutesToGridRow,
   formatTimeDisplay,
   getCurrentDay,
   generateTimeSlots,
+  normalizeActivities,
 } from '@/lib/utils';
 import { mockData } from '@/lib/mockData';
+import DraggableActivity from './DraggableActivity';
+import DroppableCell from './DroppableCell';
 
 interface CalendarGridProps {
   scheduleData: ScheduleResponse | null;
   currentDay?: string;
   exportRef?: React.RefObject<HTMLDivElement | null>;
+  editedActivities?: EditableActivity[];
+  isEditMode?: boolean;
+  onEditActivity?: (activity: EditableActivity) => void;
+  onActivityMove?: (activityId: string, newDay: string) => void;
+  onActivityResize?: (activityId: string, newStartTime: string, newEndTime: string) => void;
 }
 
 const DAYS = [
@@ -31,10 +40,113 @@ export default function CalendarGrid({
   scheduleData,
   currentDay,
   exportRef,
+  editedActivities = [],
+  isEditMode = false,
+  onEditActivity,
+  onActivityMove,
+  onActivityResize,
 }: CalendarGridProps) {
   const timeSlots = generateTimeSlots();
   const today = currentDay || getCurrentDay();
   const data = scheduleData || mockData; // Use mock data if no schedule provided
+  const [animationKey, setAnimationKey] = useState(0);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Get activities to display (edited or original)
+  const getDisplayActivities = (): EditableActivity[] => {
+    if (editedActivities.length > 0) {
+      return editedActivities;
+    }
+    if (data?.activities) {
+      return normalizeActivities(data.activities);
+    }
+    return [];
+  };
+
+  const displayActivities = getDisplayActivities();
+
+  // Trigger animation when schedule data changes
+  useEffect(() => {
+    if (scheduleData) {
+      setAnimationKey((prev) => prev + 1);
+    }
+  }, [scheduleData]);
+
+  // Handle drag end
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over, delta } = event;
+    setActiveId(null);
+
+    if (!over) return;
+
+    const activityId = active.id.toString();
+    const activity = displayActivities.find(a => a.id === activityId);
+    if (!activity) return;
+
+    // Extract day and time slot from droppable ID (format: "droppable-Monday-0")
+    const overId = over.id.toString();
+    const match = overId.match(/droppable-(\w+)-(\d+)/);
+
+    if (match) {
+      const newDay = match[1];
+      const timeSlotIndex = parseInt(match[2]);
+
+      let hasChanges = false;
+
+      // Check if day changed (horizontal drag)
+      if (activity.day !== newDay && onActivityMove) {
+        hasChanges = true;
+      }
+
+      // Check if time changed (vertical drag)
+      // Calculate new start time based on drop position
+      // Each time slot is 30 minutes, starting at 3:30 AM (210 minutes)
+      const newStartMinutes = 210 + (timeSlotIndex * 30);
+
+      // Calculate current start time
+      const currentStartMinutes = timeToMinutes(activity.startTime);
+      const duration = timeToMinutes(activity.endTime) - currentStartMinutes;
+
+      // Only update time if there's a significant vertical movement
+      if (Math.abs(newStartMinutes - currentStartMinutes) >= 30 && onActivityResize) {
+        const newEndMinutes = newStartMinutes + duration;
+
+        // Validate bounds
+        if (newStartMinutes >= 210 && newEndMinutes <= 1320) {
+          const newStartTime = minutesToTime(newStartMinutes);
+          const newEndTime = minutesToTime(newEndMinutes);
+
+          // Update both day and time
+          if (hasChanges && onActivityMove) {
+            // First move to new day
+            onActivityMove(activityId, newDay);
+          }
+          // Then update time
+          if (onActivityResize) {
+            onActivityResize(activityId, newStartTime, newEndTime);
+          }
+          return;
+        }
+      }
+
+      // If only day changed, just move
+      if (hasChanges && activity.day !== newDay && onActivityMove) {
+        onActivityMove(activityId, newDay);
+      }
+    }
+  };
+
+  // Helper functions for time conversion
+  const timeToMinutes = (time: string): number => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+
+  const minutesToTime = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  };
 
   if (!data) {
     return (
@@ -77,38 +189,51 @@ export default function CalendarGrid({
     );
   }
 
-  // Helper to get category class name
-  const getCategoryClass = (category: string): string => {
-    const categoryMap: Record<string, string> = {
-      gym: 'bg-gym',
-      'ai-learning': 'bg-ai-learning',
-      simmer: 'bg-simmer',
-      'job-apps': 'bg-job-apps',
-      guitar: 'bg-guitar',
-      office: 'bg-office',
-      family: 'bg-family',
-      sleep: 'bg-sleep',
-      breakfast: 'bg-breakfast',
-      commute: 'bg-commute',
-    };
-    return categoryMap[category] || 'bg-gray-200';
-  };
-
-  // Helper to get category icon/emoji
+  // Helper to get category icon/emoji based on category name
   const getCategoryIcon = (category: string): string => {
-    const iconMap: Record<string, string> = {
-      gym: '💪',
-      'ai-learning': '🧠',
-      simmer: '✨',
-      'job-apps': '💼',
-      guitar: '🎸',
-      office: '💻',
-      family: '👨‍👩‍👧',
-      sleep: '😴',
-      breakfast: '🍳',
-      commute: '🚗',
-    };
-    return iconMap[category] || '📌';
+    // Normalize: lowercase and replace hyphens/underscores with spaces
+    const normalized = category.toLowerCase().replace(/[-_]/g, ' ').trim();
+
+    console.log('Category matching:', category, '→', normalized); // Debug log
+
+    // Exercise & Fitness
+    if (normalized.match(/gym|workout|exercise|fitness/)) return '💪';
+    if (normalized.match(/yoga|meditation/)) return '🧘';
+    if (normalized.match(/run|jog/)) return '🏃';
+
+    // Learning & Development (check AI first before generic learning)
+    if (normalized.match(/\bai\b|artificial|machine.*learning|ml\b/)) return '🧠';
+    if (normalized.match(/brain|dump|journal|reflect/)) return '🧠';
+    if (normalized.match(/learn|study|course|education/)) return '📚';
+    if (normalized.match(/read/)) return '📖';
+
+    // Work & Career
+    if (normalized.match(/job|application|apply|career|resume|interview/)) return '💼';
+    if (normalized.match(/work|office/)) return '💻';
+    if (normalized.match(/meeting/)) return '👥';
+
+    // Creative & Hobbies
+    if (normalized.match(/guitar|music/)) return '🎸';
+    if (normalized.match(/art|paint|draw/)) return '🎨';
+    if (normalized.match(/write|writing/)) return '✍️';
+    if (normalized.match(/simmer|newsletter/)) return '✨';
+
+    // Personal & Life
+    if (normalized.match(/family|kids/)) return '👨‍👩‍👧';
+    if (normalized.match(/sleep|rest/)) return '😴';
+    if (normalized.match(/meal|breakfast|lunch|dinner|eat/)) return '🍽️';
+    if (normalized.match(/cook/)) return '🍳';
+
+    // Transportation
+    if (normalized.match(/commute|travel|drive/)) return '🚗';
+
+    // Projects
+    if (normalized.match(/project|side/)) return '🚀';
+    if (normalized.match(/app|coding|dev/)) return '💻';
+
+    // Default
+    console.warn('No emoji match found for category:', category);
+    return '📌';
   };
 
   // Calculate activity position and height
@@ -156,29 +281,14 @@ export default function CalendarGrid({
     }
   };
 
-  return (
+  const calendarContent = (
     <div
-      ref={exportRef}
-      className="bg-white rounded-xl border border-[#e9e9e7] h-auto md:h-full flex flex-col transition-all duration-300"
-      style={{ boxShadow: '0 12px 24px rgba(0, 0, 0, 0.06)' }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-4px)';
-        e.currentTarget.style.boxShadow = '0 20px 40px rgba(0, 0, 0, 0.12)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.06)';
+      className="grid gap-0 bg-white rounded-xl overflow-hidden min-w-[600px] md:min-w-0 w-max"
+      style={{
+        gridTemplateColumns: '50px repeat(7, minmax(80px, 1fr))',
+        gridTemplateRows: `36px repeat(${timeSlots.length}, 32px)`,
       }}
     >
-      <div className="flex-1 overflow-x-auto overflow-y-visible md:overflow-auto">
-        {/* Calendar Grid */}
-        <div
-          className="grid gap-0 bg-white rounded-xl overflow-hidden min-w-[600px] md:min-w-0 w-max"
-          style={{
-            gridTemplateColumns: '50px repeat(7, minmax(80px, 1fr))',
-            gridTemplateRows: `36px repeat(${timeSlots.length}, 32px)`,
-          }}
-        >
           {/* Header Row */}
           <div className="border-b border-[#e9e9e7] bg-[#f4f5f7] sticky left-0 z-10" />
           {DAYS.map((day) => (
@@ -214,79 +324,96 @@ export default function CalendarGrid({
                 {formatTimeDisplay(time)}
               </div>,
               // Day columns
-              ...DAYS.map((day, dayIdx) => (
-                <div
-                  key={`${day}-${time}`}
-                  className={`border-b border-l border-[#e9e9e7]/50 relative ${
-                    day === today ? 'bg-[#2383e2]/5' : ''
-                  }`}
-                  style={{ gridRow: rowNumber, gridColumn: dayIdx + 2 }}
-                />
-              ))
+              ...DAYS.map((day, dayIdx) => {
+                const cellId = `droppable-${day}-${idx}`;
+                return isEditMode ? (
+                  <DroppableCell
+                    key={cellId}
+                    id={cellId}
+                    day={day}
+                    time={time}
+                    isToday={day === today}
+                    rowNumber={rowNumber}
+                    columnNumber={dayIdx + 2}
+                  />
+                ) : (
+                  <div
+                    key={`${day}-${time}`}
+                    className={`border-b border-l border-[#e9e9e7]/50 relative ${
+                      day === today ? 'bg-[#2383e2]/5' : ''
+                    }`}
+                    style={{ gridRow: rowNumber, gridColumn: dayIdx + 2 }}
+                  />
+                );
+              })
             ];
           })}
 
           {/* Activity blocks - positioned absolutely within grid */}
-          {data.activities.map((activity) =>
-            activity.days.map((day) => {
-              const dayIndex = DAYS.indexOf(day);
-              if (dayIndex === -1) return null;
+          {displayActivities.map((activity, activityIndex) => {
+            const dayIndex = DAYS.indexOf(activity.day);
+            if (dayIndex === -1) return null;
 
-              const style = getActivityStyle(
-                activity.startTime,
-                activity.endTime
-              );
-              const categoryClass = getCategoryClass(activity.category);
+            const style = getActivityStyle(
+              activity.startTime,
+              activity.endTime
+            );
 
-              const duration = calculateDuration(
-                activity.startTime,
-                activity.endTime
-              );
-              const icon = getCategoryIcon(activity.category);
+            const duration = calculateDuration(
+              activity.startTime,
+              activity.endTime
+            );
+            const icon = getCategoryIcon(activity.category);
 
-              return (
-                <div
-                  key={`${activity.id}-${day}`}
-                  className={`${categoryClass} border border-gray-900/10 rounded-lg p-2.5 overflow-hidden cursor-pointer group relative`}
-                  style={{
-                    gridColumn: dayIndex + 2, // +2 for time column offset
-                    gridRowStart: style.gridRowStart,
-                    gridRowEnd: style.gridRowEnd,
-                    margin: '3px 4px',
-                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
-                    transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.12)';
-                    e.currentTarget.style.borderColor = 'rgba(35, 131, 226, 0.3)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)';
-                    e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.1)';
-                  }}
-                >
-                  <div className="flex items-start gap-1.5 mb-1">
-                    <span className="text-sm leading-none">{icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-semibold text-[#272626] leading-tight group-hover:text-[#2383e2] transition-colors duration-300">
-                        {activity.name}
-                      </div>
-                    </div>
-                    <div className="text-[9px] font-semibold text-[#787774] whitespace-nowrap bg-white/80 px-1.5 py-0.5 rounded">
-                      {duration}
-                    </div>
-                  </div>
-                  <div className="text-[9px] font-normal text-[#787774] leading-tight ml-[22px]">
-                    {formatTimeDisplay(activity.startTime)} -{' '}
-                    {formatTimeDisplay(activity.endTime)}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+            // Calculate staggered animation delay
+            const animationDelay = activityIndex * 100; // 100ms between each block
+
+            return (
+              <DraggableActivity
+                key={`${activity.id}-${animationKey}`}
+                activity={activity}
+                icon={icon}
+                duration={duration}
+                gridColumn={dayIndex + 2}
+                gridRowStart={style.gridRowStart}
+                gridRowEnd={style.gridRowEnd}
+                animationDelay={animationDelay}
+                isEditMode={isEditMode}
+                onEdit={(act) => onEditActivity && onEditActivity(act)}
+                onResize={onActivityResize}
+              />
+            );
+          })}
+    </div>
+  );
+
+  return (
+    <div
+      ref={exportRef}
+      className="bg-white rounded-xl border border-[#e9e9e7] h-auto md:h-full flex flex-col transition-all duration-300"
+      style={{ boxShadow: '0 12px 24px rgba(0, 0, 0, 0.06)' }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'translateY(-4px)';
+        e.currentTarget.style.boxShadow = '0 20px 40px rgba(0, 0, 0, 0.12)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.06)';
+      }}
+    >
+      <div className="flex-1 overflow-x-auto overflow-y-visible md:overflow-auto">
+        {/* Wrap calendar grid in DndContext when in edit mode */}
+        {isEditMode ? (
+          <DndContext
+            onDragEnd={handleDragEnd}
+            onDragStart={(event) => setActiveId(event.active.id.toString())}
+            collisionDetection={pointerWithin}
+          >
+            {calendarContent}
+          </DndContext>
+        ) : (
+          calendarContent
+        )}
       </div>
     </div>
   );

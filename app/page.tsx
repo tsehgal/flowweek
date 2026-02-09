@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import InputForm from '@/components/InputForm';
 import CalendarGrid from '@/components/CalendarGrid';
 import Legend from '@/components/Legend';
 import WeeklySummary from '@/components/WeeklySummary';
 import ExportDropdown from '@/components/ExportDropdown';
-import { ScheduleResponse } from '@/types/schedule';
-import { getCachedResponse, setCachedResponse, saveLastInput } from '@/lib/cache';
+import EditModeToggle from '@/components/EditModeToggle';
+import ActivityModal from '@/components/ActivityModal';
+import { ScheduleResponse, EditableActivity } from '@/types/schedule';
+import { getCachedResponse, setCachedResponse, saveLastInput, getEditedSchedule, saveEditedSchedule, clearEditedSchedule } from '@/lib/cache';
+import { normalizeActivities, denormalizeActivities } from '@/lib/utils';
 
 export default function Home() {
   const [scheduleData, setScheduleData] = useState<ScheduleResponse | null>(
@@ -18,6 +21,102 @@ export default function Home() {
   const [usedCache, setUsedCache] = useState(false);
   const calendarRef = useRef<HTMLDivElement>(null);
 
+  // Edit mode state
+  const [editedActivities, setEditedActivities] = useState<EditableActivity[]>([]);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [currentInputHash, setCurrentInputHash] = useState<string>('');
+  const [editModalActivity, setEditModalActivity] = useState<EditableActivity | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Determine if schedule has been edited
+  const isEdited = editedActivities.length > 0;
+
+  // Extract unique categories from schedule for the modal
+  const getUniqueCategories = useCallback(() => {
+    const activities = editedActivities.length > 0 ? editedActivities : scheduleData?.activities || [];
+    const categoryMap = new Map<string, { name: string; color: string; icon: string }>();
+
+    activities.forEach((activity) => {
+      if (!categoryMap.has(activity.category)) {
+        // Get icon from CalendarGrid's getCategoryIcon logic
+        const icon = getCategoryIcon(activity.category);
+        categoryMap.set(activity.category, {
+          name: activity.category,
+          color: activity.color,
+          icon,
+        });
+      }
+    });
+
+    return Array.from(categoryMap.values());
+  }, [editedActivities, scheduleData]);
+
+  // Helper to get category icon (matching CalendarGrid logic)
+  const getCategoryIcon = (category: string): string => {
+    const normalized = category.toLowerCase().replace(/[-_]/g, ' ').trim();
+    if (normalized.match(/gym|workout|exercise|fitness/)) return '💪';
+    if (normalized.match(/yoga|meditation/)) return '🧘';
+    if (normalized.match(/run|jog/)) return '🏃';
+    if (normalized.match(/\bai\b|artificial|machine.*learning|ml\b/)) return '🧠';
+    if (normalized.match(/brain|dump|journal|reflect/)) return '🧠';
+    if (normalized.match(/learn|study|course|education/)) return '📚';
+    if (normalized.match(/read/)) return '📖';
+    if (normalized.match(/job|application|apply|career|resume|interview/)) return '💼';
+    if (normalized.match(/work|office/)) return '💻';
+    if (normalized.match(/meeting/)) return '👥';
+    if (normalized.match(/guitar|music/)) return '🎸';
+    if (normalized.match(/art|paint|draw/)) return '🎨';
+    if (normalized.match(/write|writing/)) return '✍️';
+    if (normalized.match(/simmer|newsletter/)) return '✨';
+    if (normalized.match(/family|kids/)) return '👨‍👩‍👧';
+    if (normalized.match(/sleep|rest/)) return '😴';
+    if (normalized.match(/meal|breakfast|lunch|dinner|eat/)) return '🍽️';
+    if (normalized.match(/cook/)) return '🍳';
+    if (normalized.match(/commute|travel|drive/)) return '🚗';
+    if (normalized.match(/project|side/)) return '🚀';
+    if (normalized.match(/app|coding|dev/)) return '💻';
+    return '📌';
+  };
+
+  // Generate hash for input (same logic as cache.ts)
+  const generateInputHash = useCallback((input: string): string => {
+    let hash = 0;
+    const str = input.trim().toLowerCase();
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+  }, []);
+
+  // Load edited schedule from localStorage when schedule data changes
+  useEffect(() => {
+    if (scheduleData) {
+      const hash = currentInputHash;
+      const edited = getEditedSchedule(hash);
+      if (edited && edited.length > 0) {
+        setEditedActivities(edited);
+        console.log('✅ Loaded edited activities from localStorage');
+      } else {
+        // No cached edits - clear edited activities
+        setEditedActivities([]);
+        setIsEditMode(false);
+      }
+    }
+  }, [scheduleData, currentInputHash]);
+
+  // Auto-save edited activities with debounce
+  useEffect(() => {
+    if (editedActivities.length > 0 && currentInputHash) {
+      const timeoutId = setTimeout(() => {
+        saveEditedSchedule(currentInputHash, editedActivities);
+      }, 500);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [editedActivities, currentInputHash]);
+
   const handleSubmit = async (input: string) => {
     console.log('📝 handleSubmit called with input:', input.substring(0, 50));
     setIsLoading(true);
@@ -25,6 +124,10 @@ export default function Home() {
     setUsedCache(false);
 
     try {
+      // Generate and save input hash
+      const hash = generateInputHash(input);
+      setCurrentInputHash(hash);
+
       // Save input for persistence (production feature!)
       console.log('💾 About to save input to localStorage...');
       saveLastInput(input);
@@ -60,6 +163,82 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Edit mode handlers
+  const handleToggleEditMode = () => {
+    const newEditMode = !isEditMode;
+    setIsEditMode(newEditMode);
+
+    // When entering edit mode for the first time, initialize edited activities
+    // with normalized version of current schedule
+    if (newEditMode && editedActivities.length === 0 && scheduleData?.activities) {
+      const normalized = normalizeActivities(scheduleData.activities);
+      setEditedActivities(normalized);
+      console.log('📋 Initialized edit mode with', normalized.length, 'activities');
+    }
+  };
+
+  const handleResetToOriginal = () => {
+    if (currentInputHash) {
+      clearEditedSchedule(currentInputHash);
+      setEditedActivities([]);
+      setIsEditMode(false);
+    }
+  };
+
+  const handleActivitySave = (activity: EditableActivity) => {
+    setEditedActivities((prev) => {
+      // If editing existing activity, replace it
+      const existingIndex = prev.findIndex((a) => a.id === activity.id);
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = activity;
+        return updated;
+      }
+      // Otherwise, add new activity
+      return [...prev, activity];
+    });
+    setIsEditModalOpen(false);
+    setEditModalActivity(null);
+  };
+
+  const handleActivityDelete = (id: string) => {
+    setEditedActivities((prev) => prev.filter((a) => a.id !== id));
+    setIsEditModalOpen(false);
+    setEditModalActivity(null);
+  };
+
+  const handleAddActivity = () => {
+    setEditModalActivity(null);
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditActivity = (activity: EditableActivity) => {
+    setEditModalActivity(activity);
+    setIsEditModalOpen(true);
+  };
+
+  const handleActivityMove = (activityId: string, newDay: string) => {
+    setEditedActivities((prev) =>
+      prev.map((activity) =>
+        activity.id === activityId
+          ? { ...activity, day: newDay }
+          : activity
+      )
+    );
+    console.log(`📍 Moved activity ${activityId} to ${newDay}`);
+  };
+
+  const handleActivityResize = (activityId: string, newStartTime: string, newEndTime: string) => {
+    setEditedActivities((prev) =>
+      prev.map((activity) =>
+        activity.id === activityId
+          ? { ...activity, startTime: newStartTime, endTime: newEndTime }
+          : activity
+      )
+    );
+    console.log(`⏱️ Resized activity ${activityId}: ${newStartTime} - ${newEndTime}`);
   };
 
   return (
@@ -123,8 +302,8 @@ export default function Home() {
 
           {/* Right Column - Calendar */}
           <div className="flex-1 flex flex-col gap-4 animate-scale-in delay-150 md:overflow-hidden">
-            {/* Export Button & Cache Indicator */}
-            <div className="flex justify-between items-center gap-4 flex-shrink-0">
+            {/* Edit Mode Toggle, Export Button & Cache Indicator */}
+            <div className="flex justify-between items-center gap-4 flex-shrink-0 flex-wrap">
               {/* Cache Indicator - Shows when using cached result */}
               {usedCache && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
@@ -134,20 +313,68 @@ export default function Home() {
                   <span className="font-medium">Loaded from cache (instant!)</span>
                 </div>
               )}
-              <div className="ml-auto">
+
+              {/* Edit Mode Toggle */}
+              {scheduleData && (
+                <EditModeToggle
+                  isEditMode={isEditMode}
+                  isEdited={isEdited}
+                  onToggle={handleToggleEditMode}
+                  onReset={handleResetToOriginal}
+                />
+              )}
+
+              <div className="ml-auto flex items-center gap-3">
+                {/* Add Activity Button */}
+                {isEditMode && scheduleData && (
+                  <button
+                    onClick={handleAddActivity}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Activity
+                  </button>
+                )}
+
+                {/* Export Dropdown */}
                 <ExportDropdown
                   scheduleData={scheduleData}
                   calendarRef={calendarRef}
+                  editedActivities={editedActivities}
                 />
               </div>
             </div>
 
             {/* Calendar */}
             <div className="flex-1">
-              <CalendarGrid scheduleData={scheduleData} exportRef={calendarRef} />
+              <CalendarGrid
+                scheduleData={scheduleData}
+                exportRef={calendarRef}
+                editedActivities={editedActivities}
+                isEditMode={isEditMode}
+                onEditActivity={handleEditActivity}
+                onActivityMove={handleActivityMove}
+                onActivityResize={handleActivityResize}
+              />
             </div>
           </div>
         </div>
+
+        {/* Activity Modal */}
+        {isEditModalOpen && (
+          <ActivityModal
+            activity={editModalActivity}
+            onSave={handleActivitySave}
+            onDelete={handleActivityDelete}
+            onClose={() => {
+              setIsEditModalOpen(false);
+              setEditModalActivity(null);
+            }}
+            existingCategories={getUniqueCategories()}
+          />
+        )}
       </div>
     </main>
   );

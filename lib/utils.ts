@@ -59,3 +59,45 @@ export function generateTimeSlots(): string[] {
 
   return slots;
 }
+
+/**
+ * Normalize activities: Split multi-day activities into single-day instances
+ */
+export function normalizeActivities(activities: any[]): any[] {
+  return activities.flatMap((activity, activityIndex) =>
+    activity.days.map((day: string, dayIndex: number) => ({
+      ...activity,
+      id: `${activity.id || `activity-${activityIndex}`}-${day.toLowerCase()}-${dayIndex}`,
+      originalId: activity.id || `activity-${activityIndex}`,
+      day,
+    }))
+  );
+}
+
+/**
+ * Denormalize activities: Merge single-day instances back into multi-day activities
+ */
+export function denormalizeActivities(editables: any[]): any[] {
+  const grouped = new Map<string, any>();
+
+  editables.forEach((editable) => {
+    const key = `${editable.originalId}-${editable.startTime}-${editable.endTime}-${editable.name}`;
+
+    if (grouped.has(key)) {
+      const existing = grouped.get(key);
+      existing.days.push(editable.day);
+    } else {
+      grouped.set(key, {
+        id: editable.originalId,
+        name: editable.name,
+        category: editable.category,
+        days: [editable.day],
+        startTime: editable.startTime,
+        endTime: editable.endTime,
+        color: editable.color,
+      });
+    }
+  });
+
+  return Array.from(grouped.values());
+}

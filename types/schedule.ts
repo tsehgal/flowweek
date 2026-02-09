@@ -24,3 +24,17 @@ export interface ScheduleResponse {
   activities: Activity[];
   weeklyGoals: WeeklyGoal[];
 }
+
+// Editable activity - one instance per day
+export interface EditableActivity extends Omit<Activity, 'days'> {
+  id: string;           // Unique per instance: "gym-monday-1"
+  originalId: string;   // Links to original: "gym-1"
+  day: string;          // Single day: "Monday"
+}
+
+// localStorage cache for edited schedules
+export interface EditedScheduleCache {
+  activities: EditableActivity[];
+  lastModified: number;
+  originalInputHash: string;
+}
