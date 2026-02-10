@@ -138,7 +138,7 @@ export default function ExportDropdown({
       const y = (pdfHeight - scaledHeight) / 2;
 
       pdf.addImage(dataUrl, 'PNG', x, y, scaledWidth, scaledHeight);
-      pdf.save(`FlowWeek-Schedule-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+      pdf.save(`MakeTime-Schedule-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
     } catch (error) {
       console.error('PDF export failed:', error);
       alert(`Failed to export PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -154,8 +154,8 @@ export default function ExportDropdown({
 
     try {
       const calendar: ICalCalendar = ical({
-        name: 'FlowWeek Schedule',
-        prodId: '//FlowWeek//Schedule//EN',
+        name: 'MakeTime Schedule',
+        prodId: '//MakeTime//Schedule//EN',
       });
 
       activities.forEach((activity) => {
@@ -192,7 +192,7 @@ export default function ExportDropdown({
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `FlowWeek-Schedule-${format(new Date(), 'yyyy-MM-dd')}.ics`;
+      link.download = `MakeTime-Schedule-${format(new Date(), 'yyyy-MM-dd')}.ics`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -248,7 +248,7 @@ export default function ExportDropdown({
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `FlowWeek-Schedule-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      link.download = `MakeTime-Schedule-${format(new Date(), 'yyyy-MM-dd')}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

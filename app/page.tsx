@@ -259,11 +259,11 @@ export default function Home() {
                 </svg>
               </div>
               <h1 className="text-2xl md:text-4xl font-bold text-[#272626] tracking-tight">
-                FlowWeek
+                MakeTime
               </h1>
             </div>
             <p className="text-[#787774] text-sm md:text-base font-medium ml-10 md:ml-[52px] animate-slide-up delay-75">
-              Find your flow, every week
+              Make time for what matters
             </p>
           </div>
         </div>

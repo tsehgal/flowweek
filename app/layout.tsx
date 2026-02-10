@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FlowWeek - AI Time Blocker",
+  title: "MakeTime - AI Time Blocker",
   description: "AI-powered weekly schedule planner. Describe your goals and get a visual time-blocked calendar.",
   viewport: "width=device-width, initial-scale=1, maximum-scale=5",
 };

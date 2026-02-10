@@ -1,12 +1,12 @@
-# FlowWeek
+# MakeTime
 
-> Find your flow, every week
+> Make time for what matters
 
-An AI-powered weekly planner that transforms your goals into a visual time-blocked schedule.
+An AI-powered weekly planner that transforms your goals into a visual, editable time-blocked schedule.
 
 ## 🎯 What It Does
 
-Simply describe your weekly goals in natural language, and FlowWeek generates an optimized, color-coded schedule that helps you achieve them.
+Simply describe your weekly goals in natural language, and MakeTime generates an optimized, color-coded schedule that helps you achieve them. Then customize it with drag-and-drop editing.
 
 **Example Input:**
 ```
@@ -21,7 +21,7 @@ Family time from 6-9pm every evening is essential.
 
 ## 🚀 Live Demo
 
-[Try FlowWeek →](https://flowweek.vercel.app)
+[Try MakeTime →](https://flowweek.vercel.app)
 
 ## 🛠️ Tech Stack
 
@@ -32,12 +32,17 @@ Family time from 6-9pm every evening is essential.
 
 ## ✨ Features
 
-- 🤖 Natural language processing
-- 📅 Visual time-blocked calendar
-- 🎨 Color-coded activities
-- 📱 Mobile responsive
-- ⚡ Real-time AI generation
-- 📊 Weekly goal tracking
+- 🤖 **Natural language processing** - Describe your goals in plain English
+- 📅 **Visual time-blocked calendar** - See your entire week at a glance
+- ✏️ **Drag-and-drop editing** - Move activities between days and times
+- 📏 **Resize activities** - Adjust duration by dragging edges
+- ➕ **Add custom activities** - Create your own blocks
+- 🎨 **Color-coded categories** - Easy visual organization
+- 💾 **Auto-save** - All edits persist across sessions
+- 📤 **Export** - Download as PDF, Google Calendar, or Notion CSV
+- 📱 **Mobile responsive** - Works on all devices
+- ⚡ **Real-time AI generation** - Instant schedule creation
+- 📊 **Weekly goal tracking** - Monitor time allocation
 
 ## 🧠 How It Works
 
@@ -51,25 +56,32 @@ Family time from 6-9pm every evening is essential.
 
 ## 💡 Why I Built This
 
-As someone juggling career transition, fitness, learning AI, family time, 
-and side projects, I needed a way to visualize how all my goals could 
-fit into a realistic week. FlowWeek solves my own problem.
+As someone juggling career transition, fitness, learning AI, family time,
+and side projects, I needed a way to visualize how all my goals could
+fit into a realistic week. MakeTime helps you literally "make time" for what matters most.
 
 ## 📝 What I Learned
 
 - Prompt engineering for structured outputs
 - Building production AI applications
 - API integration and error handling
+- Complex drag-and-drop interactions (@dnd-kit)
+- State management for editable UI
+- localStorage persistence strategies
 - Responsive calendar UI design
+- CSS Grid for complex layouts
 - Deploying serverless applications
 
 ## 🔮 Future Features
 
-- [ ] Save/load schedules
+- [x] ~~Save/load schedules~~ (Auto-save implemented!)
+- [x] ~~Export to Google Calendar~~ (ICS export available!)
+- [x] ~~Drag-and-drop editing~~ (Fully implemented!)
 - [ ] Weekly templates
 - [ ] Goal progress tracking
 - [ ] Multiple week planning
-- [ ] Export to Google Calendar
+- [ ] Recurring activities
+- [ ] Collaboration/sharing
 
 ## 📄 License
 
